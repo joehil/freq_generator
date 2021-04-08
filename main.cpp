@@ -4,24 +4,60 @@
 #include <SPI.h>
 #include <SD.h>
 
-const int chipSelect = 10;
+const int chipSelect = A3;
 
 #define KEY A0;
 
 Adafruit_MCP4725 dac;
 USBSerial ser;
+
+Sd2Card card;
+SdVolume volume;
+SdFile root;
+CSV_Parser cp(/*format*/ "ddd", /*has_header*/ true, /*delimiter*/ ';');
+
 unsigned int count = 0;
-float freq = 10;
+unsigned int rows = 0;
+int16_t freq = 10;
 float d = 0;
 unsigned long myTime = 0;
 
-float calcD(float freq){
+int16_t *art;
+int16_t *frequenz;
+int16_t *dauer;
+
+float calcD(int16_t freq){
     return (7874/freq)-114.17;
+}
+
+void saw(unsigned secs, int16_t freq) {
+    uint32_t counter;
+    d = calcD(freq);
+    myTime = millis();
+    while ((millis()-myTime)/1000 < secs){
+      for (counter = 4095; counter > 33; counter-=32)
+      {
+        dac.setVoltage(counter, false);
+        delayMicroseconds(int(d));
+      }
+    }
+}
+
+void square(unsigned int secs, int16_t freq) {
+    d = 500000/freq;
+    myTime = millis();
+    while ((millis()-myTime)/1000 < secs){
+        dac.setVoltage(4095, false);
+        delayMicroseconds(int(d));
+        dac.setVoltage(0, false);
+        delayMicroseconds(int(d));
+    }
 }
 
 void setup(void) {
   ser.begin(9600);
-  delay(5000);
+
+  delay(2000);
 
   // For Adafruit MCP4725A1 the address is 0x62 (default) or 0x63 (ADDR pin tied to VCC)
   // For MCP4725A0 the address is 0x60 or 0x61
@@ -30,53 +66,90 @@ void setup(void) {
     
   d = calcD(freq);
 
-  ser.print("Initializing SD card...");
-  
+  ser.println("Einrichten der SD-Karte...");
+
+  pinMode(chipSelect, OUTPUT);
+  digitalWrite(chipSelect,LOW);
+
+  SPI.setClockDivider(SPI_CLOCK_DIV16);
+  SPI.setBitOrder(MSBFIRST);
+
+  delay(10000);
+
+  if (!card.init(SPI_FULL_SPEED, chipSelect)) {
+    ser.println("initialization failed. Things to check:");
+    ser.println("* is a card inserted?");
+    ser.println("* is your wiring correct?");
+    ser.println("* did you change the chipSelect pin to match your shield or module?");
+    while (1);
+  } else {
+    ser.println("Anschluss der SD-Karte ist in Ordnung.");
+  }  
+
+  ser.flush();
+  delay(500);
+
+  digitalWrite(chipSelect,LOW);
+  pinMode(PC13, OUTPUT);
+  digitalWrite(PC13,LOW);
+
   // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
     ser.println("Card failed, or not present");
-    
-    // don't do anything more:
-    while (1);
+    ser.flush();
+    while (1){
+      delay(5000);
+    }
   }
   ser.println("card initialized.");
 
-
-  CSV_Parser cp(/*format*/ "dd", /*has_header*/ true, /*delimiter*/ ';');
+//  CSV_Parser cp(/*format*/ "cdd", /*has_header*/ true, /*delimiter*/ ';');
   cp.readSDfile("datei.csv"); // this wouldn't work if SD.begin wasn't called before
 
-  int16_t *column_1 = (int16_t*)cp["Frequenz"];
-  int16_t *column_2 = (int16_t*)cp["Dauer"];
+  art =   (int16_t*)cp["Art"];
+  frequenz = (int16_t*)cp["Frequenz"];
+  dauer = (int16_t*)cp["Dauer"];
 
-  if (column_1 && column_2) {
+  if (art && frequenz && dauer) {
     for(int row = 0; row < cp.getRowsCount(); row++) {
-      ser.print("row = ");
+      ser.print("Zeile = ");
       ser.print(row, DEC);
+      ser.print(", Art = ");
+      ser.print(art[row], DEC);
       ser.print(", Frequenz = ");
-      ser.print(column_1[row], DEC);
+      ser.print(frequenz[row], DEC);
       ser.print(", Dauer = ");
-      ser.println(column_2[row], DEC);
+      ser.println(dauer[row], DEC);
     }
   } else {
-    ser.println("At least 1 of the columns was not found, something went wrong.");
+    ser.println("Die Tabelle ist nicht in Ordnung.");
   }
+  rows = cp.getRowsCount();
+  SD.end();
+  digitalWrite(chipSelect, HIGH);
+  digitalWrite(PC13,HIGH);
 }
 
 void loop(void) {
-    uint32_t counter;
-//    dac.setVoltage(100,false);
-    // Run through the full 12-bit scale for a triangle wave
-    // for (counter = 0; counter < 4095; counter++)
-    // {
-    //   dac.setVoltage(counter, false);
-    // }
-    //myTime = millis();
-    for (counter = 4095; counter > 33; counter-=32)
-    {
-        dac.setVoltage(counter, false);
-        delayMicroseconds(int(d));
+    ser.println("===============================================");
+    for(int row = 0; row < rows; row++) {
+      ser.print("Zeile = ");
+      ser.print(row, DEC);
+      ser.print(", Art = ");
+      ser.print(art[row], DEC);
+      ser.print(", Frequenz = ");
+      ser.print(frequenz[row], DEC);
+      ser.print(", Dauer = ");
+      ser.println(dauer[row], DEC);
+      if (art[row] == 0){
+        saw(dauer[row],frequenz[row]);
+      }
+      if (art[row] == 1){
+        square(dauer[row],frequenz[row]);
+      }
     }
-    //myTime = millis() - myTime;
-//    count++;
-//    ser.println(myTime);
+    while (1) {
+      ser.println("Ende");
+      delay(10000);
+    }
 }
