@@ -1,4 +1,21 @@
+/**************************************************************************/
+/*! 
+    @file     trianglewave.pde
+    @author   Adafruit Industries
+    @license  BSD (see license.txt)
+
+    This example will generate a triangle wave with the MCP4725 DAC.   
+
+    This is an example sketch for the Adafruit MCP4725 breakout board
+    ----> http://www.adafruit.com/products/935
+ 
+    Adafruit invests time and resources providing this open source code, 
+    please support Adafruit and open-source hardware by purchasing 
+    products from Adafruit!
+*/
+/**************************************************************************/
 #include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 #include <Adafruit_MCP4725.h>
 #include <CSV_Parser.h>
 #include <SPI.h>
@@ -15,9 +32,11 @@ Sd2Card card;
 SdVolume volume;
 SdFile root;
 CSV_Parser cp(/*format*/ "ddd", /*has_header*/ true, /*delimiter*/ ';');
+LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
 unsigned int count = 0;
 unsigned int rows = 0;
+unsigned int gesamt = 0;
 int16_t freq = 10;
 float d = 0;
 unsigned long myTime = 0;
@@ -56,6 +75,10 @@ void square(unsigned int secs, int16_t freq) {
 
 void setup(void) {
   ser.begin(9600);
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.print("Einrichten ...");
 
   delay(2000);
 
@@ -64,9 +87,9 @@ void setup(void) {
   // For MCP4725A2 the address is 0x64 or 0x65
   dac.begin(0x60);
     
-  d = calcD(freq);
-
-  ser.println("Einrichten der SD-Karte...");
+  ser.print("Einrichten der SD-Karte...");
+  lcd.setCursor(0,1);
+  lcd.println("Starten der SD-Karte ...");
 
   pinMode(chipSelect, OUTPUT);
   digitalWrite(chipSelect,LOW);
@@ -102,6 +125,8 @@ void setup(void) {
     }
   }
   ser.println("card initialized.");
+  lcd.clear();
+  lcd.print("SD-Karte ok ...");
 
 //  CSV_Parser cp(/*format*/ "cdd", /*has_header*/ true, /*delimiter*/ ';');
   cp.readSDfile("datei.csv"); // this wouldn't work if SD.begin wasn't called before
@@ -120,6 +145,7 @@ void setup(void) {
       ser.print(frequenz[row], DEC);
       ser.print(", Dauer = ");
       ser.println(dauer[row], DEC);
+      gesamt += dauer[row];
     }
   } else {
     ser.println("Die Tabelle ist nicht in Ordnung.");
@@ -128,6 +154,8 @@ void setup(void) {
   SD.end();
   digitalWrite(chipSelect, HIGH);
   digitalWrite(PC13,HIGH);
+  lcd.setCursor(0,1);
+  lcd.print("SD-Karte gelesen");
 }
 
 void loop(void) {
@@ -141,15 +169,26 @@ void loop(void) {
       ser.print(frequenz[row], DEC);
       ser.print(", Dauer = ");
       ser.println(dauer[row], DEC);
+      lcd.clear();
       if (art[row] == 0){
+        lcd.setCursor(0,0);
+        lcd.printf("Saegezahn %d/%d",row+1,rows+1);
+        lcd.setCursor(0,1);
+        lcd.printf("F:%d  D:%d/%d",frequenz[row],dauer[row],gesamt);
         saw(dauer[row],frequenz[row]);
       }
       if (art[row] == 1){
+        lcd.setCursor(0,0);
+        lcd.printf("Rechteck %d/%d",row+1,rows+1);
+        lcd.setCursor(0,1);
+        lcd.printf("F:%d  D:%d/%d",frequenz[row],dauer[row],gesamt);
         square(dauer[row],frequenz[row]);
       }
     }
     while (1) {
       ser.println("Ende");
+      lcd.clear();
+      lcd.print("Ende ...");
       delay(10000);
     }
 }
