@@ -1,19 +1,3 @@
-/**************************************************************************/
-/*! 
-    @file     trianglewave.pde
-    @author   Adafruit Industries
-    @license  BSD (see license.txt)
-
-    This example will generate a triangle wave with the MCP4725 DAC.   
-
-    This is an example sketch for the Adafruit MCP4725 breakout board
-    ----> http://www.adafruit.com/products/935
- 
-    Adafruit invests time and resources providing this open source code, 
-    please support Adafruit and open-source hardware by purchasing 
-    products from Adafruit!
-*/
-/**************************************************************************/
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_MCP4725.h>
@@ -40,6 +24,7 @@ unsigned int gesamt = 0;
 int16_t freq = 10;
 float d = 0;
 unsigned long myTime = 0;
+String keypressed = "";
 
 int16_t *art;
 int16_t *frequenz;
@@ -47,6 +32,24 @@ int16_t *dauer;
 
 float calcD(int16_t freq){
     return (7874/freq)-114.17;
+}
+
+void readKey(void){
+  if (digitalRead(PB12)==0){
+    keypressed = "up";
+  }
+  else if (digitalRead(PB13)==0){
+    keypressed = "ok";
+  }
+  else if (digitalRead(PB14)==0){
+    keypressed = "down";
+  } 
+  else if (digitalRead(PB15)==0){
+    keypressed = "back";
+  } 
+  else {
+    keypressed = "";
+  }
 }
 
 void saw(unsigned secs, int16_t freq) {
@@ -75,6 +78,12 @@ void square(unsigned int secs, int16_t freq) {
 
 void setup(void) {
   ser.begin(9600);
+
+  pinMode(PB12, INPUT_PULLUP);
+  pinMode(PB13, INPUT_PULLUP);
+  pinMode(PB14, INPUT_PULLUP);
+  pinMode(PB15, INPUT_PULLUP);
+
   lcd.init();
   lcd.backlight();
   lcd.clear();
