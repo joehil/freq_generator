@@ -24,6 +24,7 @@ unsigned int gesamt = 0;
 int16_t freq = 10;
 float d = 0;
 unsigned long myTime = 0;
+unsigned int wrkfl = 0;
 String keypressed = "";
 
 int16_t *art;
@@ -32,6 +33,34 @@ int16_t *dauer;
 
 float calcD(int16_t freq){
     return (7874/freq)-114.17;
+}
+
+void readFile(char *datei){
+//  CSV_Parser cp(/*format*/ "cdd", /*has_header*/ true, /*delimiter*/ ';');
+  cp.readSDfile(datei); // this wouldn't work if SD.begin wasn't called before
+
+  art =   (int16_t*)cp["Art"];
+  frequenz = (int16_t*)cp["Frequenz"];
+  dauer = (int16_t*)cp["Dauer"];
+
+  if (art && frequenz && dauer) {
+    for(int row = 0; row < cp.getRowsCount(); row++) {
+      ser.print("Zeile = ");
+      ser.print(row, DEC);
+      ser.print(", Art = ");
+      ser.print(art[row], DEC);
+      ser.print(", Frequenz = ");
+      ser.print(frequenz[row], DEC);
+      ser.print(", Dauer = ");
+      ser.println(dauer[row], DEC);
+      gesamt += dauer[row];
+    }
+  } else {
+    ser.println("Die Tabelle ist nicht in Ordnung.");
+  }
+  rows = cp.getRowsCount();
+  SD.end();
+//  digitalWrite(chipSelect, HIGH);
 }
 
 void readKey(void){
@@ -47,20 +76,18 @@ void readKey(void){
   else if (digitalRead(PB15)==0){
     keypressed = "back";
   } 
-  else {
-    keypressed = "";
-  }
 }
 
 void saw(unsigned secs, int16_t freq) {
     uint32_t counter;
     d = calcD(freq);
     myTime = millis();
-    while ((millis()-myTime)/1000 < secs){
+    while ((millis()-myTime)/1000 < secs && keypressed != "back"){
       for (counter = 4095; counter > 33; counter-=32)
       {
         dac.setVoltage(counter, false);
         delayMicroseconds(int(d));
+        readKey();
       }
     }
 }
@@ -68,11 +95,12 @@ void saw(unsigned secs, int16_t freq) {
 void square(unsigned int secs, int16_t freq) {
     d = 500000/freq;
     myTime = millis();
-    while ((millis()-myTime)/1000 < secs){
+    while ((millis()-myTime)/1000 < secs && keypressed != "back"){
         dac.setVoltage(4095, false);
         delayMicroseconds(int(d));
         dac.setVoltage(0, false);
         delayMicroseconds(int(d));
+        readKey();
     }
 }
 
@@ -87,7 +115,7 @@ void setup(void) {
   lcd.init();
   lcd.backlight();
   lcd.clear();
-  lcd.print("Einrichten ...");
+  lcd.print("Starten ...");
 
   delay(2000);
 
@@ -137,38 +165,39 @@ void setup(void) {
   lcd.clear();
   lcd.print("SD-Karte ok ...");
 
-//  CSV_Parser cp(/*format*/ "cdd", /*has_header*/ true, /*delimiter*/ ';');
-  cp.readSDfile("datei.csv"); // this wouldn't work if SD.begin wasn't called before
-
-  art =   (int16_t*)cp["Art"];
-  frequenz = (int16_t*)cp["Frequenz"];
-  dauer = (int16_t*)cp["Dauer"];
-
-  if (art && frequenz && dauer) {
-    for(int row = 0; row < cp.getRowsCount(); row++) {
-      ser.print("Zeile = ");
-      ser.print(row, DEC);
-      ser.print(", Art = ");
-      ser.print(art[row], DEC);
-      ser.print(", Frequenz = ");
-      ser.print(frequenz[row], DEC);
-      ser.print(", Dauer = ");
-      ser.println(dauer[row], DEC);
-      gesamt += dauer[row];
-    }
-  } else {
-    ser.println("Die Tabelle ist nicht in Ordnung.");
-  }
-  rows = cp.getRowsCount();
-  SD.end();
-  digitalWrite(chipSelect, HIGH);
+//  SD.end();
+//  digitalWrite(chipSelect, HIGH);
   digitalWrite(PC13,HIGH);
   lcd.setCursor(0,1);
   lcd.print("SD-Karte gelesen");
+  wrkfl = 0;
+  keypressed = "ok";
+  delay(2000);
+  lcd.clear();
 }
 
 void loop(void) {
-    ser.println("===============================================");
+  ser.println(keypressed);
+  ser.println(wrkfl);
+  if ((wrkfl == 0) & (keypressed == "ok")){
+    lcd.setCursor(0,0);
+    lcd.print("Menue 0");
+    wrkfl = 1;
+    keypressed = "";
+  }
+  if ((wrkfl == 1) & (keypressed == "ok")){
+    lcd.setCursor(0,0);
+    lcd.print("Menue 1");
+    wrkfl = 2;
+    keypressed = "";
+  }
+  if ((wrkfl == 2) & (keypressed == "ok")){
+    readFile("datei.csv");
+    wrkfl = 3;
+    keypressed = "";
+  }
+  if (wrkfl == 3){
+    keypressed = "";
     for(int row = 0; row < rows; row++) {
       ser.print("Zeile = ");
       ser.print(row, DEC);
@@ -193,11 +222,24 @@ void loop(void) {
         lcd.printf("F:%d  D:%d/%d",frequenz[row],dauer[row],gesamt);
         square(dauer[row],frequenz[row]);
       }
+      if (keypressed == "back"){
+        wrkfl = 0;
+        keypressed = "";
+      }
     }
-    while (1) {
+    while (keypressed != "back" && wrkfl == 3) {
       ser.println("Ende");
       lcd.clear();
       lcd.print("Ende ...");
-      delay(10000);
+      delay(1000);
+      readKey();
+      if (keypressed == "back"){
+        wrkfl = 0;
+        keypressed = "";
+      }
     }
+  }
+  delay(1000);
+  keypressed = "";
+  readKey();
 }
