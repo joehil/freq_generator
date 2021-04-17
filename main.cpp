@@ -16,10 +16,10 @@ Sd2Card card;
 SdVolume volume;
 SdFile root;
 CSV_Parser cp(/*format*/ "ddd", /*has_header*/ true, /*delimiter*/ ';');
-LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
+LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
 unsigned int count = 0;
-unsigned int rows = 0;
+int rows = 0;
 unsigned int gesamt = 0;
 int16_t freq = 10;
 float d = 0;
@@ -27,12 +27,63 @@ unsigned long myTime = 0;
 unsigned int wrkfl = 0;
 String keypressed = "";
 
+const String menue1ist1[] = { "Datei auswaehlen    ", "Magnetfeld messen   ",  "Ende                "};
+
 int16_t *art;
 int16_t *frequenz;
 int16_t *dauer;
 
 float calcD(int16_t freq){
     return (7874/freq)-114.17;
+}
+
+void readKey(void){
+  if (digitalRead(PB12)==0){
+    keypressed = "up";
+  }
+  else if (digitalRead(PB13)==0){
+    keypressed = "ok";
+  }
+  else if (digitalRead(PB14)==0){
+    keypressed = "down";
+  } 
+  else if (digitalRead(PB15)==0){
+    keypressed = "back";
+  } 
+}
+
+void menue1(void){
+  unsigned int n=0;
+  unsigned int j=1;
+  String entry;
+  lcd.clear();
+  lcd.print("Bitte auswaehlen:");
+  lcd.blink_on();
+  keypressed = "";
+  while (keypressed == ""){
+    for (int m=0; m<3;m++){
+      entry=menue1ist1[m];
+      lcd.setCursor(0,m+1);
+      lcd.print(entry);
+    }
+    lcd.setCursor(0,j);
+    readKey();
+    if (keypressed == "down"){
+      j++;
+      keypressed = "";
+    }
+    if (keypressed == "up"){
+      j--;
+      keypressed = "";
+    }
+    if (j>3) j=1;
+    if (j<1) j=3;
+    delay(500);
+  }
+}
+
+void menue2(void){
+  
 }
 
 void readFile(char *datei){
@@ -58,24 +109,9 @@ void readFile(char *datei){
   } else {
     ser.println("Die Tabelle ist nicht in Ordnung.");
   }
-  rows = cp.getRowsCount();
+  rows = cp.getRowsCount()-1;
   SD.end();
 //  digitalWrite(chipSelect, HIGH);
-}
-
-void readKey(void){
-  if (digitalRead(PB12)==0){
-    keypressed = "up";
-  }
-  else if (digitalRead(PB13)==0){
-    keypressed = "ok";
-  }
-  else if (digitalRead(PB14)==0){
-    keypressed = "down";
-  } 
-  else if (digitalRead(PB15)==0){
-    keypressed = "back";
-  } 
 }
 
 void saw(unsigned secs, int16_t freq) {
@@ -180,12 +216,14 @@ void loop(void) {
   ser.println(keypressed);
   ser.println(wrkfl);
   if ((wrkfl == 0) & (keypressed == "ok")){
+    menue1();
     lcd.setCursor(0,0);
     lcd.print("Menue 0");
     wrkfl = 1;
     keypressed = "";
   }
   if ((wrkfl == 1) & (keypressed == "ok")){
+    menue2();
     lcd.setCursor(0,0);
     lcd.print("Menue 1");
     wrkfl = 2;
