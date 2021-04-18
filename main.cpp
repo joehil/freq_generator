@@ -12,6 +12,8 @@ const int chipSelect = A3;
 Adafruit_MCP4725 dac;
 USBSerial ser;
 
+File jhroot;
+
 Sd2Card card;
 SdVolume volume;
 SdFile root;
@@ -27,7 +29,14 @@ unsigned long myTime = 0;
 unsigned int wrkfl = 0;
 String keypressed = "";
 
-const String menue1ist1[] = { "Datei auswaehlen    ", "Magnetfeld messen   ",  "Ende                "};
+const String menue1ist1[] = { "Datei auswaehlen    ", 
+                              "Magnetfeld messen   ",  
+                              "Ende                "};
+
+const unsigned int wrkfllist1[] = {1,90,99};
+
+String entries[100];
+String datei;
 
 int16_t *art;
 int16_t *frequenz;
@@ -78,12 +87,72 @@ void menue1(void){
     }
     if (j>3) j=1;
     if (j<1) j=3;
+    if (keypressed == "ok"){
+      wrkfl = wrkfllist1[j-1];
+    }
     delay(500);
   }
 }
 
 void menue2(void){
-  
+  unsigned int n=0;
+  unsigned int j=1;
+  String entry;
+  lcd.clear();
+  lcd.print("Datei auswaehlen    ");
+  lcd.blink_on();
+  keypressed = "";
+  while (keypressed == ""){
+    for (int m=0; m<3;m++){
+      entry=entries[m];
+      lcd.setCursor(0,m+1);
+      lcd.print(entry);
+    }
+    lcd.setCursor(0,j);
+    readKey();
+    if (keypressed == "down"){
+      j++;
+      keypressed = "";
+    }
+    if (keypressed == "up"){
+      j--;
+      keypressed = "";
+    }
+    if (j>3) j=1;
+    if (j<1) j=3;
+    if (keypressed == "ok"){
+      datei = entries[j-1];
+      wrkfl = 2;
+    }
+    delay(500);
+  }
+}
+
+void printDirectory(File dir, int numTabs) {
+  int n=0;
+  while (true) {
+
+    File entry =  dir.openNextFile();
+    if (! entry) {
+      // no more files
+      break;
+    }
+    for (uint8_t i = 0; i < numTabs; i++) {
+      ser.print('\t');
+    }
+    ser.print(entry.name());
+    if (entry.isDirectory()) {
+      ser.println("/");
+      printDirectory(entry, numTabs + 1);
+    } else {
+      // files have sizes, directories do not
+      ser.print("\t\t");
+      ser.println(entry.size(), DEC);
+      entries[n]=entry.name();
+      n++;
+    }
+    entry.close();
+  }
 }
 
 void readFile(char *datei){
@@ -162,7 +231,7 @@ void setup(void) {
     
   ser.print("Einrichten der SD-Karte...");
   lcd.setCursor(0,1);
-  lcd.println("Starten der SD-Karte ...");
+  lcd.print("Starten der SD-Karte ...");
 
   pinMode(chipSelect, OUTPUT);
   digitalWrite(chipSelect,LOW);
@@ -201,6 +270,9 @@ void setup(void) {
   lcd.clear();
   lcd.print("SD-Karte ok ...");
 
+  jhroot = SD.open("/");
+  printDirectory(jhroot, 0);
+
 //  SD.end();
 //  digitalWrite(chipSelect, HIGH);
   digitalWrite(PC13,HIGH);
@@ -217,20 +289,17 @@ void loop(void) {
   ser.println(wrkfl);
   if ((wrkfl == 0) & (keypressed == "ok")){
     menue1();
-    lcd.setCursor(0,0);
-    lcd.print("Menue 0");
-    wrkfl = 1;
-    keypressed = "";
   }
   if ((wrkfl == 1) & (keypressed == "ok")){
     menue2();
-    lcd.setCursor(0,0);
-    lcd.print("Menue 1");
-    wrkfl = 2;
-    keypressed = "";
   }
   if ((wrkfl == 2) & (keypressed == "ok")){
-    readFile("datei.csv");
+    char *tdatei;
+    char datei_ar[datei.length()+1];
+    datei.toCharArray(datei_ar, datei.length()+1);
+    tdatei = &datei_ar[0];
+    ser.println(tdatei);
+    readFile(tdatei);
     wrkfl = 3;
     keypressed = "";
   }
@@ -265,19 +334,14 @@ void loop(void) {
         keypressed = "";
       }
     }
-    while (keypressed != "back" && wrkfl == 3) {
-      ser.println("Ende");
-      lcd.clear();
-      lcd.print("Ende ...");
-      delay(1000);
-      readKey();
-      if (keypressed == "back"){
-        wrkfl = 0;
-        keypressed = "";
-      }
-    }
   }
-  delay(1000);
+  if (wrkfl == 99){
+    lcd.clear();
+    lcd.print("Ende ...");
+    while(1);
+  }
+
+  delay(500);
   keypressed = "";
   readKey();
 }
