@@ -36,6 +36,7 @@ const String menue1ist1[] = { "Datei auswaehlen    ",
 const unsigned int wrkfllist1[] = {1,90,99};
 
 String entries[100];
+unsigned int entr_len=0;
 String datei;
 
 int16_t *art;
@@ -104,7 +105,7 @@ void menue2(void){
   keypressed = "";
   while (keypressed == ""){
     for (int m=0; m<3;m++){
-      entry=entries[m];
+      entry=entries[m+n];
       lcd.setCursor(0,m+1);
       lcd.print(entry);
     }
@@ -118,20 +119,42 @@ void menue2(void){
       j--;
       keypressed = "";
     }
-    if (j>3) j=1;
+    if (j>3) {
+      ser.print("n: ");
+      ser.println(n+3);
+      ser.print("len: ");
+      ser.println(entr_len);
+      if (n+3 < entr_len) {
+        n++;
+        j=3;
+      }
+      else j=1;
+    }
     if (j<1) j=3;
     if (keypressed == "ok"){
-      datei = entries[j-1];
+      datei = entries[j-1+n];
       wrkfl = 2;
     }
     delay(500);
   }
 }
 
-void printDirectory(File dir, int numTabs) {
-  int n=0;
-  while (true) {
+bool isCsv(String filename) {
+  int8_t len = filename.length();
+  bool result;
+  if (filename.endsWith(".csv") 
+   || filename.endsWith(".CSV")
+  ) {
+    result = true;
+  } else {
+    result = false;
+  }
+  return result;
+}
 
+void printDirectory(File dir, int numTabs) {
+  entr_len=0;
+  while (true) {
     File entry =  dir.openNextFile();
     if (! entry) {
       // no more files
@@ -148,8 +171,10 @@ void printDirectory(File dir, int numTabs) {
       // files have sizes, directories do not
       ser.print("\t\t");
       ser.println(entry.size(), DEC);
-      entries[n]=entry.name();
-      n++;
+      if (isCsv(entry.name())){
+        entries[entr_len]=entry.name();
+        entr_len++;
+      }
     }
     entry.close();
   }
@@ -231,7 +256,7 @@ void setup(void) {
     
   ser.print("Einrichten der SD-Karte...");
   lcd.setCursor(0,1);
-  lcd.print("Starten der SD-Karte ...");
+  lcd.print("Starten der SD-Karte");
 
   pinMode(chipSelect, OUTPUT);
   digitalWrite(chipSelect,LOW);
@@ -291,6 +316,7 @@ void loop(void) {
     menue1();
   }
   if ((wrkfl == 1) & (keypressed == "ok")){
+    delay(2000);
     menue2();
   }
   if ((wrkfl == 2) & (keypressed == "ok")){
@@ -304,6 +330,7 @@ void loop(void) {
     keypressed = "";
   }
   if (wrkfl == 3){
+    unsigned int summe=0;
     keypressed = "";
     for(int row = 0; row < rows; row++) {
       ser.print("Zeile = ");
@@ -316,23 +343,26 @@ void loop(void) {
       ser.println(dauer[row], DEC);
       lcd.clear();
       if (art[row] == 0){
+        summe += dauer[row];
         lcd.setCursor(0,0);
         lcd.printf("Saegezahn %d/%d",row+1,rows+1);
         lcd.setCursor(0,1);
-        lcd.printf("F:%d  D:%d/%d",frequenz[row],dauer[row],gesamt);
+        lcd.printf("F:%d  D:%d/%d/%d",frequenz[row],dauer[row],summe,gesamt);
         saw(dauer[row],frequenz[row]);
       }
       if (art[row] == 1){
+        summe += dauer[row];
         lcd.setCursor(0,0);
         lcd.printf("Rechteck %d/%d",row+1,rows+1);
         lcd.setCursor(0,1);
-        lcd.printf("F:%d  D:%d/%d",frequenz[row],dauer[row],gesamt);
+        lcd.printf("F:%d  D:%d/%d/%d",frequenz[row],dauer[row],summe,gesamt);
         square(dauer[row],frequenz[row]);
       }
       if (keypressed == "back"){
         wrkfl = 0;
         keypressed = "";
       }
+      wrkfl = 99;
     }
   }
   if (wrkfl == 99){
