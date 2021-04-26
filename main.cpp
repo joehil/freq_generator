@@ -1,6 +1,8 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_MCP4725.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_HMC5883_U.h>
 #include <CSV_Parser.h>
 #include <SPI.h>
 #include <SD.h>
@@ -10,13 +12,12 @@ const int chipSelect = A3;
 #define KEY A0;
 
 Adafruit_MCP4725 dac;
+Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
 USBSerial ser;
 
 File jhroot;
 
 Sd2Card card;
-SdVolume volume;
-SdFile root;
 CSV_Parser cp(/*format*/ "ddd", /*has_header*/ true, /*delimiter*/ ';');
 LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
@@ -137,6 +138,64 @@ void menue2(void){
     }
     delay(500);
   }
+}
+
+void displaySensorDetails(void)
+{
+  sensor_t sensor;
+  sensors_event_t event; 
+  float magval=0;
+  float offset=0;
+  float val=0;
+
+  if(!mag.begin())
+  {
+    /* There was a problem detecting the HMC5883 ... check your connections */
+    ser.println("Ooops, no HMC5883 detected ... Check your wiring!");
+    while(1);
+  }
+
+  mag.getSensor(&sensor);
+  ser.println("------------------------------------");
+  ser.print  ("Sensor:       "); Serial.println(sensor.name);
+  ser.print  ("Driver Ver:   "); Serial.println(sensor.version);
+  ser.print  ("Unique ID:    "); Serial.println(sensor.sensor_id);
+  ser.print  ("Max Value:    "); Serial.print(sensor.max_value); Serial.println(" uT");
+  ser.print  ("Min Value:    "); Serial.print(sensor.min_value); Serial.println(" uT");
+  ser.print  ("Resolution:   "); Serial.print(sensor.resolution); Serial.println(" uT");  
+  ser.println("------------------------------------");
+  ser.println("");
+  delay(500);
+
+  keypressed = "";
+
+  while(keypressed != "ok"){
+    mag.getEvent(&event);
+    magval = event.magnetic.z;
+
+    val=magval-offset;
+    if (abs(val)<1) val=0;
+ 
+    ser.println(val);
+    lcd.clear();
+    lcd.print(val);
+
+    readKey(); 
+    if (keypressed == "up"){
+      keypressed = "";
+      offset=magval;
+    }
+    if (keypressed == "down"){
+      dac.setVoltage(4095, false);
+      keypressed = "";
+    }
+    delay(500);
+  }
+}
+
+void magnetfeld(void){
+  displaySensorDetails();
+  wrkfl = 0;
 }
 
 bool isCsv(String filename) {
@@ -267,6 +326,12 @@ void setup(void) {
   delay(10000);
 
   if (!card.init(SPI_FULL_SPEED, chipSelect)) {
+    lcd.clear();
+    lcd.print(card.errorCode());
+    lcd.setCursor(0,2);
+    lcd.print("Fehler beim Starten");
+    lcd.setCursor(0,3);
+    lcd.print("der SD-Karte");
     ser.println("initialization failed. Things to check:");
     ser.println("* is a card inserted?");
     ser.println("* is your wiring correct?");
@@ -364,6 +429,10 @@ void loop(void) {
       }
       wrkfl = 99;
     }
+  }
+  if ((wrkfl == 90) & (keypressed == "ok")){
+    delay(2000);
+    magnetfeld();
   }
   if (wrkfl == 99){
     lcd.clear();
